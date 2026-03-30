@@ -1,0 +1,1 @@
+<livewire:marketplace.comp.header />

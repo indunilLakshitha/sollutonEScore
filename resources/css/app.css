@@ -1,0 +1,13 @@
+/* @tailwind base;
+@tailwind components;
+@tailwind utilities; */
+
+[x-cloak] {
+    display: none;
+}
+
+/* Theme ships `filter: brightness(100)` for dark sidebar logo; `100` is a 100× multiplier, not 100%. */
+html[data-bs-theme="dark"] .edash-menu .edash-menu-header .edash-logo .edash-logo-main,
+html[data-bs-theme="dark"] .edash-menu .edash-menu-header .edash-logo .edash-logo-abbr {
+    filter: none;
+}
