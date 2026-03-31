@@ -65,7 +65,7 @@ Route::prefix('workscore')->group(function () {
         Route::post('/forgot-password/notify', [ForgotPasswordController::class, 'notify'])->name('forgotPassword.notify');
         Route::get('/forgot-password/verify/{ref_id}', [ForgotPasswordController::class, 'verifyView'])->name('forgotPassword.verifyView');
         Route::post('/forgot-password/verify', [ForgotPasswordController::class, 'verify'])->name('forgotPassword.verify');
-        Route::get('/forgot-password/change/{ref_id}', [ForgotPasswordController::class, 'changeVie/forgot-passwordw'])->name('forgotPassword.changeView');
+        Route::get('/forgot-password/change/{ref_id}', [ForgotPasswordController::class, 'changeView'])->name('forgotPassword.changeView');
         Route::post('/forgot-password/change', [ForgotPasswordController::class, 'change'])->name('forgotPassword.change');
     });
 
