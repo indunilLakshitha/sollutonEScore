@@ -1,0 +1,1 @@
+{"version":1,"defects":[],"times":{"Tests\\Feature\\AuthenticationTest::test_login_screen_can_be_rendered":0.697,"Tests\\Feature\\AuthenticationTest::test_users_can_authenticate_using_the_login_screen":1.826,"Tests\\Feature\\AuthenticationTest::test_users_can_not_authenticate_with_invalid_password":0.941}}

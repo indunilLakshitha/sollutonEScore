@@ -49,12 +49,8 @@ Route::get('/', function () {
 });
 
 Route::prefix('workscore')->group(function () {
-    Route::get('/', function () {
-        if (auth()->check()) {
-            return redirect()->route('dashboard');
-        }
-
-        return redirect()->route('login');
+    Route::middleware(['auth:web', 'noindex', 'is_blocked'])->get('/', function () {
+        return view('dashboard');
     });
 
     /*
