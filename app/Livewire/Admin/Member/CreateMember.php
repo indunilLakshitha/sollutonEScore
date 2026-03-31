@@ -11,11 +11,12 @@ use Livewire\Component;
 
 class CreateMember extends Component
 {
-    public string $name = '';
+    public string $firstName = '';
+    public string $lastName = '';
+    public string $email = '';
     public ?string $regNo = null;     // ER number (used as user id)
     public ?int $roleId = null;
 
-    public ?string $uniqueId = null;  // username
     public ?string $mobileNo = null;
     public bool $fixedSalary = false;
 
@@ -61,9 +62,10 @@ class CreateMember extends Component
         }
 
         $rules = [
-            'name' => 'required|string',
+            'firstName' => 'required|string|max:255',
+            'lastName' => 'required|string|max:255',
+            'email' => 'required|email:rfc,dns|max:255|unique:users,email',
             'regNo' => 'required|string|max:255|unique:users,reg_no',
-            'uniqueId' => 'nullable|string|max:255|unique:users,unique_id',
             'mobileNo' => 'nullable|string|max:255',
             'fixedSalary' => 'required|boolean',
             'activeStatus' => 'required|integer|in:' . User::UNBLOCKED . ',' . User::BLOCKED,
@@ -95,9 +97,11 @@ class CreateMember extends Component
             : null;
 
         $user = new User();
-        $user->name = $this->name;
+        $user->first_name = $this->firstName;
+        $user->last_name = $this->lastName;
+        $user->name = trim($this->firstName . ' ' . $this->lastName);
+        $user->email = $this->email;
         $user->reg_no = $this->regNo;
-        $user->unique_id = $this->uniqueId;
         $user->mobile_no = $this->mobileNo;
         if ($role) {
             $user->role_id = $role->id;
@@ -118,15 +122,15 @@ class CreateMember extends Component
                 : null;
         }
         $user->active_status = $this->activeStatus;
-        $user->email = $this->regNo; // matches current Fortify login lookup
         $user->password = Hash::make($pw);
         $user->save();
 
         $this->reset([
-            'name',
+            'firstName',
+            'lastName',
+            'email',
             'regNo',
             'roleId',
-            'uniqueId',
             'mobileNo',
             'fixedSalary',
             'salaryAmount',

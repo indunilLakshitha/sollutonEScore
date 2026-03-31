@@ -7,6 +7,7 @@ use App\Models\TaskCategory;
 use App\Models\UserPerformance;
 use App\Services\ManagementIncomeService;
 use App\Services\TaskNotificationMessenger;
+use App\Support\HtmlSanitizer;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 
@@ -15,6 +16,7 @@ class UpdateTask extends Component
     public int $id;
 
     public string $name = '';
+    public ?string $description = null;
     public int $taskCategoryId = 0;
     public int $maxScore = 0;
     public ?string $deadlineAt = null; // datetime-local
@@ -38,6 +40,7 @@ class UpdateTask extends Component
         $this->id = (int) $task->id;
 
         $this->name = $task->name;
+        $this->description = $task->description;
         $this->taskCategoryId = (int) $task->task_category_id;
         $this->maxScore = (int) ($task->max_score ?? 0);
         $this->deadlineAt = $task->deadline_at ? $task->deadline_at->format('Y-m-d\\TH:i') : null;
@@ -68,13 +71,17 @@ class UpdateTask extends Component
 
         $this->validate([
             'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
             'taskCategoryId' => 'required|integer|exists:task_categories,id',
             'maxScore' => 'required|integer|min:0|max:100000',
             'deadlineAt' => 'nullable|date',
         ]);
 
+        $desc = HtmlSanitizer::basic($this->description);
+
         $task = Task::query()->whereKey($this->id)->firstOrFail();
         $task->name = $this->name;
+        $task->description = $desc;
         $task->task_category_id = $this->taskCategoryId;
         $task->max_score = $this->maxScore;
         $task->deadline_at = $this->deadlineAt ? date('Y-m-d H:i:s', strtotime($this->deadlineAt)) : null;

@@ -16,6 +16,11 @@ use Livewire\Component;
 class MonthlySummary extends Component
 {
     public int $year = 0;
+    public string $search = '';
+    public ?string $filterCreatedDay = null;
+    public ?string $filterCreatedMonth = null;
+    public ?string $filterCreatedFrom = null;
+    public ?string $filterCreatedTo = null;
 
     public function mount(): void
     {
@@ -27,10 +32,44 @@ class MonthlySummary extends Component
         // keep as a hook for live updates
     }
 
+    public function updatedSearch(): void
+    {
+        // live re-render
+    }
+
+    public function updatedFilterCreatedDay(): void
+    {
+        // live re-render
+    }
+
+    public function updatedFilterCreatedMonth(): void
+    {
+        // live re-render
+    }
+
+    public function updatedFilterCreatedFrom(): void
+    {
+        // live re-render
+    }
+
+    public function updatedFilterCreatedTo(): void
+    {
+        // live re-render
+    }
+
+    public function clearDateFilters(): void
+    {
+        $this->filterCreatedDay = null;
+        $this->filterCreatedMonth = null;
+        $this->filterCreatedFrom = null;
+        $this->filterCreatedTo = null;
+    }
+
     public function render()
     {
         $userId = (int) Auth::id();
         $year = (int) $this->year;
+        $search = trim($this->search);
 
         $user = User::query()->whereKey($userId)->first();
         if (!$user) {
@@ -51,8 +90,38 @@ class MonthlySummary extends Component
             ->map(fn ($v) => (int) $v)
             ->all();
 
-        $assignedScoreByMonth = Task::query()
-            ->where('assigned_user_id', $userId)
+        $taskScope = Task::query()
+            ->where('assigned_user_id', $userId);
+
+        if ($search !== '') {
+            $taskScope->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhereHas('category', function ($c) use ($search) {
+                        $c->where('name', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        if ($this->filterCreatedDay) {
+            $taskScope->whereDate('created_at', $this->filterCreatedDay);
+        } elseif ($this->filterCreatedMonth) {
+            $parts = explode('-', $this->filterCreatedMonth);
+            $mYear = isset($parts[0]) ? (int) $parts[0] : 0;
+            $mMonth = isset($parts[1]) ? (int) $parts[1] : 0;
+            if ($mYear > 0 && $mMonth >= 1 && $mMonth <= 12) {
+                $taskScope->whereYear('created_at', $mYear)
+                    ->whereMonth('created_at', $mMonth);
+            }
+        } else {
+            if ($this->filterCreatedFrom) {
+                $taskScope->whereDate('created_at', '>=', $this->filterCreatedFrom);
+            }
+            if ($this->filterCreatedTo) {
+                $taskScope->whereDate('created_at', '<=', $this->filterCreatedTo);
+            }
+        }
+
+        $assignedScoreByMonth = (clone $taskScope)
             ->whereYear('created_at', $year)
             ->selectRaw('MONTH(created_at) as m, COALESCE(SUM(max_score), 0) as total')
             ->groupBy('m')
@@ -60,8 +129,7 @@ class MonthlySummary extends Component
             ->map(fn ($v) => (float) $v)
             ->all();
 
-        $approvedScoreByMonth = Task::query()
-            ->where('assigned_user_id', $userId)
+        $approvedScoreByMonth = (clone $taskScope)
             ->where('status', Task::STATUS_APPROVED)
             ->whereYear('approved_at', $year)
             ->selectRaw('MONTH(approved_at) as m, COALESCE(SUM(score), 0) as total')
@@ -70,8 +138,7 @@ class MonthlySummary extends Component
             ->map(fn ($v) => (float) $v)
             ->all();
 
-        $totalTasksByMonth = Task::query()
-            ->where('assigned_user_id', $userId)
+        $totalTasksByMonth = (clone $taskScope)
             ->whereYear('created_at', $year)
             ->selectRaw('MONTH(created_at) as m, COUNT(*) as c')
             ->groupBy('m')
@@ -79,8 +146,7 @@ class MonthlySummary extends Component
             ->map(fn ($v) => (int) $v)
             ->all();
 
-        $pendingTasksByMonth = Task::query()
-            ->where('assigned_user_id', $userId)
+        $pendingTasksByMonth = (clone $taskScope)
             ->whereYear('created_at', $year)
             ->where('status', Task::STATUS_ASSIGNED)
             ->selectRaw('MONTH(created_at) as m, COUNT(*) as c')
@@ -89,8 +155,7 @@ class MonthlySummary extends Component
             ->map(fn ($v) => (int) $v)
             ->all();
 
-        $completedTasksByMonth = Task::query()
-            ->where('assigned_user_id', $userId)
+        $completedTasksByMonth = (clone $taskScope)
             ->whereYear('created_at', $year)
             ->whereIn('status', [Task::STATUS_SUBMITTED, Task::STATUS_APPROVED, Task::STATUS_REJECTED])
             ->selectRaw('MONTH(created_at) as m, COUNT(*) as c')
@@ -99,8 +164,7 @@ class MonthlySummary extends Component
             ->map(fn ($v) => (int) $v)
             ->all();
 
-        $expiredTasksByMonth = Task::query()
-            ->where('assigned_user_id', $userId)
+        $expiredTasksByMonth = (clone $taskScope)
             ->whereYear('created_at', $year)
             ->whereNotNull('deadline_at')
             ->where('status', '!=', Task::STATUS_APPROVED)

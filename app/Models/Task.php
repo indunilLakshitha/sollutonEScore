@@ -7,10 +7,16 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\DB;
 
 class Task extends Model
 {
     use HasFactory;
+
+    /** Human-readable shared task id: {@see allocateNextTaskUid()} */
+    public const TASK_UID_PREFIX = 'T';
+
+    public const TASK_UID_START = 1000;
 
     public const STATUS_UNASSIGNED = 'Unassigned';
     public const STATUS_ASSIGNED = 'Assigned';
@@ -19,9 +25,11 @@ class Task extends Model
     public const STATUS_REJECTED = 'Rejected';
 
     protected $fillable = [
+        'task_uid',
         'task_category_id',
         'assigned_user_id',
         'name',
+        'description',
         'max_score',
         'deadline_at',
         'status',
@@ -54,12 +62,60 @@ class Task extends Model
     }
 
     /**
+     * Next shared id in the form T1000, T1001, … (starts at {@see Task::TASK_UID_START}).
+     */
+    public static function allocateNextTaskUid(): string
+    {
+        return DB::transaction(function (): string {
+            $row = DB::table('task_uid_sequence')->where('id', 1)->lockForUpdate()->first();
+            if ($row === null) {
+                throw new \RuntimeException('task_uid_sequence is not initialized; run migrations.');
+            }
+            $n = (int) $row->next_number;
+            DB::table('task_uid_sequence')->where('id', 1)->update(['next_number' => $n + 1]);
+
+            return self::TASK_UID_PREFIX.$n;
+        });
+    }
+
+    /**
+     * Rows matching category, title, max score, and deadline (ignores task_uid). Used for legacy grouping.
+     *
+     * @return Builder<Task>
+     */
+    public static function queryMatchingFields(Task $template): Builder
+    {
+        $query = static::query()
+            ->where('task_category_id', $template->task_category_id)
+            ->where('name', $template->name)
+            ->where('max_score', $template->max_score);
+
+        if ($template->deadline_at === null) {
+            $query->whereNull('deadline_at');
+        } else {
+            $dt = $template->deadline_at instanceof Carbon
+                ? $template->deadline_at
+                : Carbon::parse((string) $template->deadline_at);
+            $query->where('deadline_at', $dt->format('Y-m-d H:i:s'));
+        }
+
+        return $query;
+    }
+
+    /**
      * Same task definition: category, title, max score, and deadline (both null matches both null).
      *
      * @param  Builder<Task>  $query
      */
     public function scopeForSameDefinitionAs(Builder $query, Task $template): void
     {
+        $uid = $template->task_uid;
+        if ($uid !== null && $uid !== '') {
+            $query->where('task_uid', $uid);
+
+            return;
+        }
+
         $query->where('task_category_id', $template->task_category_id)
             ->where('name', $template->name)
             ->where('max_score', $template->max_score);

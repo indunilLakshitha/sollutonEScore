@@ -9,10 +9,17 @@ use Livewire\Component;
 
 class Index extends Component
 {
-    public int $year = 0;
+    private const MIN_ENTRY_YEAR = 2026;
 
-    /** @var array<int, string|null> */
-    public array $salesCountInputs = [];
+    private const MAX_ENTRY_YEAR = 2050;
+
+    /** Calendar month for the entry (HTML month input: YYYY-MM). */
+    public ?string $salesEntryMonth = null;
+
+    public ?string $salesCountEntry = null;
+
+    /** @var array<int, array{year: int, month: int, sales_count: int}> */
+    public array $companySalesRows = [];
 
     public function mount(): void
     {
@@ -20,13 +27,8 @@ class Index extends Component
             abort(404);
         }
 
-        $this->year = (int) now()->format('Y');
-        $this->loadSalesCounts();
-    }
-
-    public function updatedYear(): void
-    {
-        $this->loadSalesCounts();
+        $this->salesEntryMonth = $this->clampEntryMonthString(now()->format('Y-m'));
+        $this->refreshCompanySalesRows();
     }
 
     public function save(): void
@@ -36,54 +38,62 @@ class Index extends Component
         }
 
         $this->validate([
-            'year' => 'required|integer|min:2000|max:2100',
-            'salesCountInputs' => 'required|array|size:12',
-            'salesCountInputs.*' => 'nullable|integer|min:0|max:100000000',
+            'salesEntryMonth' => 'required|date_format:Y-m',
+            'salesCountEntry' => 'required|integer|min:0|max:100000000',
         ]);
 
-        for ($month = 1; $month <= 12; $month++) {
-            $raw = $this->salesCountInputs[$month] ?? null;
+        $parts = explode('-', (string) $this->salesEntryMonth);
+        $year = (int) ($parts[0] ?? 0);
+        $month = (int) ($parts[1] ?? 0);
+        if ($year < self::MIN_ENTRY_YEAR || $year > self::MAX_ENTRY_YEAR || $month < 1 || $month > 12) {
+            $this->addError('salesEntryMonth', 'Choose a month between '.self::MIN_ENTRY_YEAR.' and '.self::MAX_ENTRY_YEAR.'.');
 
-            if ($raw === null || $raw === '') {
-                CompanyMonthlySale::query()
-                    ->where('year', $this->year)
-                    ->where('month', $month)
-                    ->delete();
-                app(ManagementIncomeService::class)->syncForMonth($this->year, $month);
-                continue;
-            }
-
-            CompanyMonthlySale::query()->updateOrCreate(
-                [
-                    'year' => $this->year,
-                    'month' => $month,
-                ],
-                [
-                    'sales_count' => (int) $raw,
-                ]
-            );
-
-            app(ManagementIncomeService::class)->syncForMonth($this->year, $month);
+            return;
         }
 
-        $this->loadSalesCounts();
-        $this->dispatch('success_alert', ['title' => 'Company monthly sales saved.']);
+        $count = (int) $this->salesCountEntry;
+
+        CompanyMonthlySale::query()->updateOrCreate(
+            [
+                'year' => $year,
+                'month' => $month,
+            ],
+            [
+                'sales_count' => $count,
+            ]
+        );
+
+        app(ManagementIncomeService::class)->syncForMonth($year, $month);
+
+        $this->refreshCompanySalesRows();
+        $this->salesCountEntry = null;
+        $this->dispatch('success_alert', ['title' => 'Company sales count saved for '.sprintf('%04d-%02d', $year, $month).'.']);
     }
 
-    private function loadSalesCounts(): void
+    private function refreshCompanySalesRows(): void
     {
-        $this->salesCountInputs = [];
-        for ($month = 1; $month <= 12; $month++) {
-            $this->salesCountInputs[$month] = null;
-        }
+        $this->companySalesRows = CompanyMonthlySale::query()
+            ->orderByDesc('year')
+            ->orderByDesc('month')
+            ->get(['year', 'month', 'sales_count'])
+            ->map(fn (CompanyMonthlySale $r): array => [
+                'year' => (int) $r->year,
+                'month' => (int) $r->month,
+                'sales_count' => (int) ($r->sales_count ?? 0),
+            ])
+            ->values()
+            ->all();
+    }
 
-        $rows = CompanyMonthlySale::query()
-            ->where('year', $this->year)
-            ->get(['month', 'sales_count']);
+    private function clampEntryMonthString(string $ym): string
+    {
+        $parts = explode('-', $ym);
+        $y = (int) ($parts[0] ?? self::MIN_ENTRY_YEAR);
+        $m = (int) ($parts[1] ?? 1);
+        $y = max(self::MIN_ENTRY_YEAR, min(self::MAX_ENTRY_YEAR, $y));
+        $m = max(1, min(12, $m));
 
-        foreach ($rows as $row) {
-            $this->salesCountInputs[(int) $row->month] = (string) ((int) $row->sales_count);
-        }
+        return sprintf('%04d-%02d', $y, $m);
     }
 
     public function render()

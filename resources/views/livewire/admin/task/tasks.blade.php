@@ -197,10 +197,28 @@
                                 aria-label="Close"></button>
                         </div>
                         <div class="modal-body">
-                            <p class="text-muted small">Search by name or registration number, select one or more
-                                members, then confirm.</p>
+                            <p class="text-muted small">Pick members and/or roles. Each checked role assigns to every <strong>active</strong> user in that role.</p>
 
                             <div class="mb-3">
+                                <span class="fw-semibold small d-block mb-2">Assign by role</span>
+                                <p class="text-muted small mb-2">Tick one or more roles to include every <strong>active</strong> user in that role.</p>
+                                <div class="d-flex flex-wrap gap-3">
+                                    @foreach ($assignRoles as $role)
+                                        <div class="form-check" wire:key="assign-modal-role-{{ $role->id }}">
+                                            <input class="form-check-input" type="checkbox"
+                                                id="assign-modal-role-cb-{{ $role->id }}"
+                                                value="{{ (int) $role->id }}"
+                                                wire:model.live="selectedRoleIds">
+                                            <label class="form-check-label" for="assign-modal-role-cb-{{ $role->id }}">
+                                                {{ $role->name }}
+                                            </label>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <span class="fw-semibold small d-block mb-2">Or search members</span>
                                 <div class="input-group">
                                     <span class="input-group-text"><i class="fi fi-rr-search"></i></span>
                                     <input type="text" class="form-control"
@@ -244,6 +262,12 @@
                             @error('selectedUserIds')
                                 <div class="text-danger small">{{ $message }}</div>
                             @enderror
+                            @foreach ($errors->get('selectedRoleIds') as $msg)
+                                <div class="text-danger small">{{ $msg }}</div>
+                            @endforeach
+                            @foreach ($errors->get('selectedRoleIds.*') as $msg)
+                                <div class="text-danger small">{{ $msg }}</div>
+                            @endforeach
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-light" wire:click="closeAssignModal">Cancel</button>

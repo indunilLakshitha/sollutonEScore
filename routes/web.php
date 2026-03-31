@@ -45,91 +45,101 @@ use Illuminate\Support\Facades\Route;
 |
 */
 Route::get('/', function () {
-    if (auth()->check()) {
-        return redirect()->route('dashboard');
-    }
-
-    return redirect()->route('login');
+    return redirect('/workscore');
 });
 
-/*
-| Custom forgot password (SMS OTP) — Fortify still serves GET /forgot-password (password.request).
-| These routes power auth/forgot-password.blade.php and the OTP flow.
-*/
-Route::middleware(['guest'])->group(function () {
-    Route::post('/forgot-password/notify', [ForgotPasswordController::class, 'notify'])->name('forgotPassword.notify');
-    Route::get('/forgot-password/verify/{ref_id}', [ForgotPasswordController::class, 'verifyView'])->name('forgotPassword.verifyView');
-    Route::post('/forgot-password/verify', [ForgotPasswordController::class, 'verify'])->name('forgotPassword.verify');
-    Route::get('/forgot-password/change/{ref_id}', [ForgotPasswordController::class, 'changeVie/forgot-passwordw'])->name('forgotPassword.changeView');
-    Route::post('/forgot-password/change', [ForgotPasswordController::class, 'change'])->name('forgotPassword.change');
-});
+Route::prefix('workscore')->group(function () {
+    Route::get('/', function () {
+        if (auth()->check()) {
+            return redirect()->route('dashboard');
+        }
 
-Route::middleware(['auth:web', 'noindex', 'is_blocked'])->group(function () {
-    Route::get('/profile', [ProfileController::class, 'index'])->name('profile.edit.custom');
-
-    Route::middleware(['is_admin'])->prefix('admin')->name('admin.')->group(function () {
-        Route::get('/members', function () {
-            return view('Admin.Member.index');
-        })->name('member.index');
-
-        Route::get('/members/create', function () {
-            return view('Admin.Member.create');
-        })->name('member.create');
-
-        Route::get('/members/{id}/edit', function ($id) {
-            return view('Admin.Member.edit', compact('id'));
-        })->name('member.edit');
-
-        Route::get('/task-categories', function () {
-            return view('Admin.TaskCategory.index');
-        })->name('task-category.index');
-
-        Route::get('/task-categories/create', function () {
-            return view('Admin.TaskCategory.create');
-        })->name('task-category.create');
-
-        Route::get('/task-categories/{id}/edit', function ($id) {
-            return view('Admin.TaskCategory.edit', compact('id'));
-        })->name('task-category.edit');
-
-        Route::get('/tasks', function () {
-            return view('Admin.Task.index');
-        })->name('task.index');
-
-        Route::get('/tasks/create', function () {
-            return view('Admin.Task.create');
-        })->name('task.create');
-
-        Route::get('/tasks/{id}/edit', function ($id) {
-            return view('Admin.Task.edit', compact('id'));
-        })->name('task.edit');
-
-        Route::get('/company-sales', function () {
-            return view('Admin.CompanySales.index');
-        })->name('company-sales.index');
-
-        Route::get('/settings', function () {
-            return view('Admin.Settings.index');
-        })->name('settings.index');
-
-        Route::get('/member-performance', function () {
-            return view('Admin.Performance.index');
-        })->name('member-performance.index');
-
-        Route::get('/member-performance/{id}/tasks', function ($id) {
-            return view('Admin.Performance.tasks', compact('id'));
-        })->name('member-performance.tasks');
+        return redirect()->route('login');
     });
 
-    Route::get('/my-tasks', function () {
-        return view('Task.my-tasks');
-    })->name('task.my-tasks');
+    /*
+    | Custom forgot password (SMS OTP) — Fortify still serves GET /forgot-password (password.request).
+    | These routes power auth/forgot-password.blade.php and the OTP flow.
+    */
+    Route::middleware(['guest'])->group(function () {
+        Route::post('/forgot-password/notify', [ForgotPasswordController::class, 'notify'])->name('forgotPassword.notify');
+        Route::get('/forgot-password/verify/{ref_id}', [ForgotPasswordController::class, 'verifyView'])->name('forgotPassword.verifyView');
+        Route::post('/forgot-password/verify', [ForgotPasswordController::class, 'verify'])->name('forgotPassword.verify');
+        Route::get('/forgot-password/change/{ref_id}', [ForgotPasswordController::class, 'changeVie/forgot-passwordw'])->name('forgotPassword.changeView');
+        Route::post('/forgot-password/change', [ForgotPasswordController::class, 'change'])->name('forgotPassword.change');
+    });
 
-    Route::get('/monthly-summary', function () {
-        return view('Task.monthly-summary');
-    })->name('task.monthly-summary');
+    Route::middleware(['auth:web', 'noindex', 'is_blocked'])->group(function () {
+        Route::get('/profile', [ProfileController::class, 'index'])->name('profile.edit.custom');
 
-    Route::get('/dashboard', function () {
-        return view('dashboard');
-    })->name('dashboard');
+        Route::middleware(['is_admin'])->prefix('admin')->name('admin.')->group(function () {
+            Route::get('/members', function () {
+                return view('Admin.Member.index');
+            })->name('member.index');
+
+            Route::get('/members/create', function () {
+                return view('Admin.Member.create');
+            })->name('member.create');
+
+            Route::get('/members/{id}/edit', function ($id) {
+                return view('Admin.Member.edit', compact('id'));
+            })->name('member.edit');
+
+            Route::get('/task-categories', function () {
+                return view('Admin.TaskCategory.index');
+            })->name('task-category.index');
+
+            Route::get('/task-categories/create', function () {
+                return view('Admin.TaskCategory.create');
+            })->name('task-category.create');
+
+            Route::get('/task-categories/{id}/edit', function ($id) {
+                return view('Admin.TaskCategory.edit', compact('id'));
+            })->name('task-category.edit');
+
+            Route::get('/tasks', function () {
+                return view('Admin.Task.index');
+            })->name('task.index');
+
+            Route::get('/tasks/create', function () {
+                return view('Admin.Task.create');
+            })->name('task.create');
+
+            Route::get('/tasks/{id}/edit', function ($id) {
+                return view('Admin.Task.edit', compact('id'));
+            })->name('task.edit');
+
+            Route::get('/company-sales', function () {
+                return view('Admin.CompanySales.index');
+            })->name('company-sales.index');
+
+            Route::get('/settings', function () {
+                return view('Admin.Settings.index');
+            })->name('settings.index');
+
+            Route::get('/member-performance', function () {
+                return view('Admin.Performance.index');
+            })->name('member-performance.index');
+
+            Route::get('/member-performance/{id}/tasks', function ($id) {
+                return view('Admin.Performance.tasks', compact('id'));
+            })->name('member-performance.tasks');
+        });
+
+        Route::get('/my-tasks', function () {
+            return view('Task.my-tasks');
+        })->name('task.my-tasks');
+
+        Route::get('/my-tasks/{id}', function ($id) {
+            return view('Task.task-details', compact('id'));
+        })->name('task.details');
+
+        Route::get('/monthly-summary', function () {
+            return view('Task.monthly-summary');
+        })->name('task.monthly-summary');
+
+        Route::get('/dashboard', function () {
+            return view('dashboard');
+        })->name('dashboard');
+    });
 });

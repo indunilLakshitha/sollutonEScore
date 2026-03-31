@@ -11,13 +11,39 @@
 
                                     <div class="row g-4 mb-4">
                                         <div class="col-md-3">
-                                            <label class="fw-semibold text-muted" for="member_name">Name</label>
+                                            <label class="fw-semibold text-muted" for="member_first_name">First name</label>
                                         </div>
                                         <div class="col-md-9">
-                                            <input id="member_name" type="text" class="form-control" wire:model='name'
-                                                placeholder="Name" />
+                                            <input id="member_first_name" type="text" class="form-control" wire:model="firstName"
+                                                placeholder="First name" />
                                         </div>
-                                        @error('name')
+                                        @error('firstName')
+                                            <div style="color: red">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+
+                                    <div class="row g-4 mb-4">
+                                        <div class="col-md-3">
+                                            <label class="fw-semibold text-muted" for="member_last_name">Last name</label>
+                                        </div>
+                                        <div class="col-md-9">
+                                            <input id="member_last_name" type="text" class="form-control" wire:model="lastName"
+                                                placeholder="Last name" />
+                                        </div>
+                                        @error('lastName')
+                                            <div style="color: red">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+
+                                    <div class="row g-4 mb-4">
+                                        <div class="col-md-3">
+                                            <label class="fw-semibold text-muted" for="member_email">Email</label>
+                                        </div>
+                                        <div class="col-md-9">
+                                            <input id="member_email" type="email" class="form-control" wire:model="email"
+                                                placeholder="Email" />
+                                        </div>
+                                        @error('email')
                                             <div style="color: red">{{ $message }}</div>
                                         @enderror
                                     </div>
@@ -27,23 +53,10 @@
                                             <label class="fw-semibold text-muted" for="member_reg_no">ER Number</label>
                                         </div>
                                         <div class="col-md-9">
-                                            <input id="member_reg_no" type="text" class="form-control" wire:model='regNo'
+                                            <input id="member_reg_no" type="text" class="form-control" wire:model="regNo"
                                                 placeholder="ER number" />
                                         </div>
                                         @error('regNo')
-                                            <div style="color: red">{{ $message }}</div>
-                                        @enderror
-                                    </div>
-
-                                    <div class="row g-4 mb-4">
-                                        <div class="col-md-3">
-                                            <label class="fw-semibold text-muted" for="member_username">Username</label>
-                                        </div>
-                                        <div class="col-md-9">
-                                            <input id="member_username" type="text" class="form-control" wire:model='uniqueId'
-                                                placeholder="Username (optional)" />
-                                        </div>
-                                        @error('uniqueId')
                                             <div style="color: red">{{ $message }}</div>
                                         @enderror
                                     </div>

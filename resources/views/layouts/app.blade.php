@@ -275,6 +275,77 @@
                 }
             });
         });
+
+        window.addEventListener('task_details_popup', function(e) {
+            var d = e.detail;
+            if (Array.isArray(d)) d = d[0];
+            if (!d || !window.Swal) return;
+
+            var t = d.task || {};
+            var otherUsers = Array.isArray(d.other_users) ? d.other_users : [];
+            var canSubmit = !!d.can_submit;
+
+            var esc = function(s) {
+                return (s ?? '').toString()
+                    .replaceAll('&', '&amp;')
+                    .replaceAll('<', '&lt;')
+                    .replaceAll('>', '&gt;')
+                    .replaceAll('"', '&quot;')
+                    .replaceAll("'", '&#039;');
+            };
+
+            var otherHtml = otherUsers.length
+                ? '<ul class="text-start mb-0 ps-3">' + otherUsers.map(function(u) {
+                    return '<li>' + esc(u.name) + (u.reg_no ? ' <span class="text-muted">(' + esc(u.reg_no) + ')</span>' : '') + '</li>';
+                }).join('') + '</ul>'
+                : '<div class="text-muted small">No other assigned users.</div>';
+
+            var descHtml = t.description
+                ? '<div class="mb-3 text-start"><div class="fw-semibold">Description</div><div class="text-muted small">' + esc(t.description) + '</div></div>'
+                : '';
+
+            var noteInputHtml = canSubmit
+                ? '<textarea id="swal_task_note" class="swal2-textarea" placeholder="Optional note..."></textarea>'
+                : '';
+
+            Swal.fire({
+                title: esc(t.name || 'Task details'),
+                html: '' +
+                    '<div class="text-start">' +
+                    '  <div class="row g-2 small mb-3">' +
+                    '    <div class="col-md-6"><span class="text-muted">Category:</span> ' + esc(t.category || '—') + '</div>' +
+                    '    <div class="col-md-6"><span class="text-muted">Deadline:</span> ' + esc(t.deadline_at || '—') + '</div>' +
+                    '    <div class="col-md-6"><span class="text-muted">Status:</span> ' + (t.is_expired ? 'Expired' : esc(t.status || '—')) + '</div>' +
+                    '    <div class="col-md-6"><span class="text-muted">Score:</span> ' + (t.is_expired ? '0' : (t.score ?? '—')) + ' / ' + esc(t.max_score ?? 0) + '</div>' +
+                    '  </div>' +
+                    descHtml +
+                    '  <div class="mb-3 text-start">' +
+                    '    <div class="fw-semibold">Other assigned users</div>' +
+                    otherHtml +
+                    '  </div>' +
+                    '  <div class="small text-start mb-2"><span class="text-muted">Submitted at:</span> ' + esc(t.submitted_at || '—') + '</div>' +
+                    '  <div class="small text-start mb-3"><span class="text-muted">Last note:</span> ' + esc(t.submission_note || '—') + '</div>' +
+                    noteInputHtml +
+                    '</div>',
+                showCancelButton: true,
+                confirmButtonText: canSubmit ? 'Mark as done' : 'Close',
+                cancelButtonText: 'Close',
+                focusConfirm: false,
+                preConfirm: function() {
+                    if (!canSubmit) return true;
+                    return {
+                        note: document.getElementById('swal_task_note')?.value ?? ''
+                    };
+                }
+            }).then(function(res) {
+                if (res.isConfirmed && canSubmit && window.Livewire) {
+                    window.Livewire.dispatch('markAsDoneWithNote', {
+                        id: parseInt(t.id, 10),
+                        note: (res.value && res.value.note) ? res.value.note : ''
+                    });
+                }
+            });
+        });
     </script>
 </body>
 

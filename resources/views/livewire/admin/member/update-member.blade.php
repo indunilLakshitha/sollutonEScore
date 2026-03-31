@@ -22,13 +22,39 @@
                                         <div class="tab-pane fade @if ($activeEditTab === 'basic') show active @endif" id="member-basic-tab" role="tabpanel">
                                             <div class="row g-4 mb-4">
                                                 <div class="col-md-3">
-                                                    <label class="fw-semibold text-muted" for="member_name">Name</label>
+                                                    <label class="fw-semibold text-muted" for="member_first_name">First name</label>
                                                 </div>
                                                 <div class="col-md-9">
-                                                    <input id="member_name" type="text" class="form-control" wire:model='name'
-                                                        placeholder="Name" />
+                                                    <input id="member_first_name" type="text" class="form-control" wire:model="firstName"
+                                                        placeholder="First name" />
                                                 </div>
-                                                @error('name')
+                                                @error('firstName')
+                                                    <div style="color: red">{{ $message }}</div>
+                                                @enderror
+                                            </div>
+
+                                            <div class="row g-4 mb-4">
+                                                <div class="col-md-3">
+                                                    <label class="fw-semibold text-muted" for="member_last_name">Last name</label>
+                                                </div>
+                                                <div class="col-md-9">
+                                                    <input id="member_last_name" type="text" class="form-control" wire:model="lastName"
+                                                        placeholder="Last name" />
+                                                </div>
+                                                @error('lastName')
+                                                    <div style="color: red">{{ $message }}</div>
+                                                @enderror
+                                            </div>
+
+                                            <div class="row g-4 mb-4">
+                                                <div class="col-md-3">
+                                                    <label class="fw-semibold text-muted" for="member_email">Email</label>
+                                                </div>
+                                                <div class="col-md-9">
+                                                    <input id="member_email" type="email" class="form-control" wire:model="email"
+                                                        placeholder="Email" />
+                                                </div>
+                                                @error('email')
                                                     <div style="color: red">{{ $message }}</div>
                                                 @enderror
                                             </div>
@@ -42,19 +68,6 @@
                                                         placeholder="ER number" />
                                                 </div>
                                                 @error('regNo')
-                                                    <div style="color: red">{{ $message }}</div>
-                                                @enderror
-                                            </div>
-
-                                            <div class="row g-4 mb-4">
-                                                <div class="col-md-3">
-                                                    <label class="fw-semibold text-muted" for="member_username">Username</label>
-                                                </div>
-                                                <div class="col-md-9">
-                                                    <input id="member_username" type="text" class="form-control" wire:model='uniqueId' disabled
-                                                        placeholder="Username" />
-                                                </div>
-                                                @error('uniqueId')
                                                     <div style="color: red">{{ $message }}</div>
                                                 @enderror
                                             </div>
@@ -194,53 +207,69 @@
 
                                             <hr class="my-12 border-top-dashed" />
 
-                                            <div class="row g-4 mb-4">
-                                                <div class="col-md-3">
-                                                    <label class="fw-semibold text-muted" for="salary_year">Monthly salary year</label>
-                                                </div>
-                                                <div class="col-md-3">
-                                                    <input id="salary_year" type="number" class="form-control" min="2000"
-                                                        max="2100" wire:model.live="salaryYear" />
-                                                </div>
-                                                <div class="col-md-6 d-flex align-items-center">
-                                                    <span class="text-muted small">Set monthly salary and sales count for this member.</span>
-                                                </div>
-                                            </div>
+                                            @if ($fixedSalary !== true)
+                                                <p class="text-muted small mb-3">
+                                                    Enter the salary amount and the month it applies to (one saved row per month). Performance and income use this amount for that calendar month.
+                                                </p>
 
-                                            <div class="row g-3 mb-4">
-                                                @php($monthNames = [1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr', 5 => 'May', 6 => 'Jun', 7 => 'Jul', 8 => 'Aug', 9 => 'Sep', 10 => 'Oct', 11 => 'Nov', 12 => 'Dec'])
-                                                @foreach ($monthNames as $monthNo => $monthLabel)
-                                                    <div class="col-md-4 col-sm-6">
-                                                        <div class="border rounded p-2">
-                                                            <span class="form-label small text-muted mb-2 d-inline-block">{{ $monthLabel }}</span>
-                                                            <input type="number" class="form-control mb-2" step="0.01" min="0"
-                                                                wire:model="monthlySalaryInputs.{{ $monthNo }}"
-                                                                placeholder="Salary amount" />
-                                                            {{-- <input type="number" class="form-control" min="0"
-                                                                wire:model="monthlySalesCountInputs.{{ $monthNo }}"
-                                                                placeholder="Sales count" /> --}}
-                                                        </div>
+                                                <div class="row g-4 mb-3">
+                                                    <div class="col-md-3">
+                                                        <label class="fw-semibold text-muted" for="salary_entry_month">Month</label>
                                                     </div>
-                                                @endforeach
-                                            </div>
-
-                                            @error('salaryYear')
-                                                <div style="color: red" class="mb-2">{{ $message }}</div>
-                                            @enderror
-                                            @error('monthlySalaryInputs.*')
-                                                <div style="color: red" class="mb-2">{{ $message }}</div>
-                                            @enderror
-                                            @error('monthlySalesCountInputs.*')
-                                                <div style="color: red" class="mb-2">{{ $message }}</div>
-                                            @enderror
-
-                                            <div class="row g-4 mb-4">
-                                                <div class="col-md-3"></div>
-                                                <div class="col-md-9">
-                                                    <button class="btn btn-outline-primary" type="button"
-                                                        wire:click="saveMonthlySalaries">Save monthly salaries</button>
+                                                    <div class="col-md-4">
+                                                        <input id="salary_entry_month" type="month" class="form-control"
+                                                            wire:model="salaryEntryMonth"
+                                                            min="2026-01" max="2050-12" />
+                                                    </div>
                                                 </div>
-                                            </div>
+                                                @error('salaryEntryMonth')
+                                                    <div style="color: red" class="mb-2">{{ $message }}</div>
+                                                @enderror
+
+                                                <div class="row g-4 mb-3">
+                                                    <div class="col-md-3">
+                                                        <label class="fw-semibold text-muted" for="salary_entry_amount">Salary amount</label>
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <input id="salary_entry_amount" type="number" class="form-control" step="0.01"
+                                                            min="0" wire:model="monthlySalaryEntryAmount"
+                                                            placeholder="Amount for selected month" />
+                                                    </div>
+                                                </div>
+                                                @error('monthlySalaryEntryAmount')
+                                                    <div style="color: red" class="mb-2">{{ $message }}</div>
+                                                @enderror
+
+                                                <div class="row g-4 mb-4">
+                                                    <div class="col-md-3"></div>
+                                                    <div class="col-md-9">
+                                                        <button class="btn btn-outline-primary" type="button"
+                                                            wire:click="saveMonthlySalaries">Save salary for this month</button>
+                                                    </div>
+                                                </div>
+
+                                                @php($monthNames = [1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr', 5 => 'May', 6 => 'Jun', 7 => 'Jul', 8 => 'Aug', 9 => 'Sep', 10 => 'Oct', 11 => 'Nov', 12 => 'Dec'])
+                                                @if (! empty($monthlySalaryRows))
+                                                    <div class="table-responsive border rounded">
+                                                        <table class="table table-sm mb-0">
+                                                            <thead class="table-light">
+                                                                <tr>
+                                                                    <th>Month</th>
+                                                                    <th class="text-end">Salary amount</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                @foreach ($monthlySalaryRows as $row)
+                                                                    <tr wire:key="salary-row-{{ $row['year'] }}-{{ $row['month'] }}">
+                                                                        <td>{{ $row['year'] }} — {{ $monthNames[$row['month']] ?? $row['month'] }}</td>
+                                                                        <td class="text-end">{{ number_format((float) $row['amount'], 2) }}</td>
+                                                                    </tr>
+                                                                @endforeach
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                @endif
+                                            @endif
                                         </div>
                                     </div>
 

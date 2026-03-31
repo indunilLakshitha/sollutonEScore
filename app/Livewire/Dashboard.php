@@ -7,13 +7,50 @@ use App\Models\IncomeSalesMultiplier;
 use App\Models\Role;
 use App\Models\Task;
 use App\Models\User;
+use App\Models\UserMonthlyBonus;
 use App\Models\UserMonthlySalary;
 use App\Models\UserSalesIncome;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Schema;
 use Livewire\Component;
 
 class Dashboard extends Component
 {
+    public function claimBonus(): void
+    {
+        if (!Auth::check()) {
+            abort(404);
+        }
+
+        $userId = (int) Auth::id();
+        $now = now();
+        $year = (int) $now->format('Y');
+        $month = (int) $now->format('n');
+
+        $bonusQuery = UserMonthlyBonus::query()
+            ->where('user_id', $userId)
+            ->where('year', $year)
+            ->where('month', $month);
+
+        if (Schema::hasColumn('user_monthly_bonuses', 'claimed_at')) {
+            $bonusQuery->whereNull('claimed_at');
+        }
+
+        $bonus = $bonusQuery->first();
+
+        if (!$bonus) {
+            $this->dispatch('failed_alert', ['title' => 'No bonus available.']);
+            return;
+        }
+
+        if (Schema::hasColumn('user_monthly_bonuses', 'claimed_at')) {
+            $bonus->claimed_at = now();
+        }
+        $bonus->save();
+
+        $this->dispatch('success_alert', ['title' => 'Bonus claimed.']);
+    }
+
     public function render()
     {
         $userId = (int) Auth::id();
@@ -151,6 +188,26 @@ class Dashboard extends Component
             $incomeProgressPercent = 100.0;
         }
 
+        $currentBonusQuery = UserMonthlyBonus::query()
+            ->where('user_id', $userId)
+            ->where('year', $year)
+            ->where('month', $month);
+
+        if (Schema::hasColumn('user_monthly_bonuses', 'claimed_at')) {
+            $currentBonusQuery->whereNull('claimed_at');
+        }
+
+        $currentBonus = $currentBonusQuery->first();
+
+        // Same “pending” definition as My Tasks: Assigned or Rejected (action still needed).
+        $pendingTasks = Task::query()
+            ->with(['category:id,name'])
+            ->where('assigned_user_id', $userId)
+            ->whereIn('status', [Task::STATUS_ASSIGNED, Task::STATUS_REJECTED])
+            ->orderByDesc('id')
+            ->limit(5)
+            ->get();
+
         return view('livewire.dashboard', [
             'currentApprovedTotal' => $currentApprovedTotal,
             'currentAssignedTotal' => $currentAssignedTotal,
@@ -163,6 +220,8 @@ class Dashboard extends Component
             'incomeProgressPercent' => $incomeProgressPercent,
             'incomeLabels' => $incomeLabels,
             'incomeValues' => $incomeValues,
+            'currentBonus' => $currentBonus,
+            'pendingTasks' => $pendingTasks,
         ]);
     }
 }

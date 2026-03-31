@@ -59,6 +59,22 @@
 
                                     <div class="row g-4 mb-4">
                                         <div class="col-md-3">
+                                            <label class="fw-semibold text-muted" for="task_description_editor_edit">Task description</label>
+                                            <p class="small text-muted mb-0">Supports rich text (bold, lists, etc.).</p>
+                                        </div>
+                                        <div class="col-md-9">
+                                            <div wire:ignore>
+                                                <textarea id="task_description_editor_edit" class="form-control"></textarea>
+                                            </div>
+                                            <input type="hidden" wire:model.defer="description" />
+                                        </div>
+                                        @error('description')
+                                            <div style="color: red">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+
+                                    <div class="row g-4 mb-4">
+                                        <div class="col-md-3">
                                             <label class="fw-semibold text-muted" for="task_category">Category</label>
                                         </div>
                                         <div class="col-md-9">
@@ -118,7 +134,7 @@
 
                                 <div class="row g-4 mb-4">
                                     <div class="col-md-3">
-                                        <label class="fw-semibold text-muted">Submission</label>
+                                        <span class="fw-semibold text-muted">Submission</span>
                                     </div>
                                     <div class="col-md-9">
                                         <div class="border rounded p-3 bg-body-tertiary">
@@ -169,3 +185,26 @@
             </div>
         </div>
 </div>
+
+@push('modals')
+    <script>
+        document.addEventListener('livewire:init', function() {
+            var el = document.getElementById('task_description_editor_edit');
+            if (!el || typeof $ === 'undefined' || typeof $(el).summernote !== 'function') return;
+            if ($(el).data('summernote')) return;
+
+            $(el).summernote({
+                height: 220,
+                callbacks: {
+                    onChange: function(contents) {
+                        try {
+                            @this.set('description', contents);
+                        } catch (e) {}
+                    }
+                }
+            });
+
+            $(el).summernote('code', @js($description));
+        });
+    </script>
+@endpush

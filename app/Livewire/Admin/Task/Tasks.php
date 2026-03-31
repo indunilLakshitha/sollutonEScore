@@ -3,6 +3,7 @@
 namespace App\Livewire\Admin\Task;
 
 use App\Livewire\Admin\Task\Concerns\WithAssignUserPicker;
+use App\Models\Role;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\UserPerformance;
@@ -126,6 +127,7 @@ class Tasks extends Component
         $this->assigningTaskId = $taskId;
         $this->assignUserSearch = '';
         $this->selectedUserIds = [];
+        $this->selectedRoleIds = [];
         $this->showAssignModal = true;
     }
 
@@ -135,6 +137,7 @@ class Tasks extends Component
         $this->assigningTaskId = null;
         $this->assignUserSearch = '';
         $this->selectedUserIds = [];
+        $this->selectedRoleIds = [];
     }
 
     public function assignSelectedUsers(): void
@@ -143,9 +146,20 @@ class Tasks extends Component
             abort(404);
         }
 
+        $this->selectedUserIds = array_values(array_unique(array_filter(
+            array_map('intval', $this->selectedUserIds ?? []),
+            static fn (int $id): bool => $id > 0
+        )));
+        $this->selectedRoleIds = array_values(array_unique(array_filter(
+            array_map('intval', $this->selectedRoleIds ?? []),
+            static fn (int $id): bool => $id > 0
+        )));
+
         $this->validate([
-            'selectedUserIds' => 'required|array|min:1',
+            'selectedUserIds' => 'array',
             'selectedUserIds.*' => 'integer|exists:users,id',
+            'selectedRoleIds' => 'array',
+            'selectedRoleIds.*' => 'integer|exists:roles,id',
         ]);
 
         if ($this->assigningTaskId === null) {
@@ -164,11 +178,54 @@ class Tasks extends Component
             return;
         }
 
-        $ids = array_values(array_unique(array_map('intval', $this->selectedUserIds)));
+        $alreadyAssigned = array_flip(Task::assignedUserIdsForDefinition($template));
+
+        $userPickIds = $this->selectedUserIds;
+        $roleIds = $this->selectedRoleIds;
+        $fromRoles = [];
+        if ($roleIds !== []) {
+            $roleCandidates = User::query()
+                ->whereIn('role_id', $roleIds)
+                ->where('active_status', User::UNBLOCKED)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+
+            if ($userPickIds === [] && $roleCandidates === []) {
+                $this->addError('selectedRoleIds', 'No active users found for the selected role(s).');
+
+                return;
+            }
+
+            if ($userPickIds === [] && $roleCandidates !== [] && ! array_filter(
+                $roleCandidates,
+                static fn (int $id): bool => ! isset($alreadyAssigned[$id])
+            )) {
+                $this->addError(
+                    'selectedRoleIds',
+                    'All active members in the selected role(s) are already assigned to this task.'
+                );
+
+                return;
+            }
+
+            $fromRoles = array_values(array_filter(
+                $roleCandidates,
+                static fn (int $id): bool => ! isset($alreadyAssigned[$id])
+            ));
+        }
+
+        $ids = array_values(array_unique(array_merge($userPickIds, $fromRoles)));
+
+        if ($ids === []) {
+            $this->addError('selectedUserIds', 'Select at least one member or one role.');
+
+            return;
+        }
 
         $toAssign = array_values(array_filter(
             $ids,
-            fn (int $userId): bool => ! $template->assignmentExistsForUserId($userId)
+            static fn (int $userId): bool => ! isset($alreadyAssigned[$userId])
         ));
         $skipped = count($ids) - count($toAssign);
 
@@ -179,7 +236,15 @@ class Tasks extends Component
             return;
         }
 
-        DB::transaction(function () use ($template, $toAssign) {
+        $templateHadUid = ($template->task_uid !== null && $template->task_uid !== '');
+        $taskUid = $templateHadUid ? (string) $template->task_uid : Task::allocateNextTaskUid();
+
+        DB::transaction(function () use ($template, $toAssign, $taskUid, $templateHadUid) {
+            if (! $templateHadUid) {
+                Task::queryMatchingFields($template)->update(['task_uid' => $taskUid]);
+                $template->refresh();
+            }
+
             foreach ($toAssign as $userId) {
                 $row = $template->replicate();
                 $row->assigned_user_id = $userId;
@@ -189,6 +254,7 @@ class Tasks extends Component
                 $row->score = null;
                 $row->approved_at = null;
                 $row->rejected_at = null;
+                $row->task_uid = $taskUid;
                 $row->save();
             }
 
@@ -304,7 +370,9 @@ class Tasks extends Component
             ->orderByDesc('id')
             ->paginate(15);
 
-        return view('livewire.admin.task.tasks', compact('tasks'));
+        $assignRoles = Role::query()->orderBy('sort_order')->orderBy('id')->get(['id', 'name']);
+
+        return view('livewire.admin.task.tasks', compact('tasks', 'assignRoles'));
     }
 
     /**

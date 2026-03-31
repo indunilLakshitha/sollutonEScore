@@ -3,10 +3,12 @@
 namespace App\Livewire\Admin\Task;
 
 use App\Livewire\Admin\Task\Concerns\WithAssignUserPicker;
+use App\Models\Role;
 use App\Models\Task;
 use App\Models\TaskCategory;
 use App\Models\User;
 use App\Services\TaskNotificationMessenger;
+use App\Support\HtmlSanitizer;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +19,8 @@ class CreateTask extends Component
     use WithAssignUserPicker;
 
     public string $name = '';
+
+    public ?string $description = null;
 
     public int $taskCategoryId = 0;
 
@@ -76,19 +80,68 @@ class CreateTask extends Component
 
         $this->validate([
             'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
             'taskCategoryId' => 'required|integer|exists:task_categories,id',
             'maxScore' => 'required|integer|min:0|max:100000',
             'deadlineAt' => 'nullable|date',
             'selectedUserIds' => 'nullable|array',
             'selectedUserIds.*' => 'integer|exists:users,id',
+            'selectedRoleIds' => 'nullable|array',
+            'selectedRoleIds.*' => 'integer|exists:roles,id',
         ]);
 
         $deadlineDb = $this->deadlineAt ? date('Y-m-d H:i:s', strtotime($this->deadlineAt)) : null;
-        $ids = array_values(array_unique(array_map('intval', $this->selectedUserIds)));
+        $desc = HtmlSanitizer::basic($this->description);
+
+        $definitionProbe = new Task([
+            'task_category_id' => $this->taskCategoryId,
+            'name' => $this->name,
+            'max_score' => $this->maxScore,
+        ]);
+        $definitionProbe->setAttribute('deadline_at', $deadlineDb);
+        $alreadyAssigned = array_flip(Task::assignedUserIdsForDefinition($definitionProbe));
+
+        $userPickIds = array_values(array_unique(array_map('intval', $this->selectedUserIds)));
+        $roleIds = array_values(array_unique(array_map('intval', $this->selectedRoleIds)));
+        $fromRoles = [];
+        if ($roleIds !== []) {
+            $roleCandidates = User::query()
+                ->whereIn('role_id', $roleIds)
+                ->where('active_status', User::UNBLOCKED)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+
+            if ($userPickIds === [] && $roleCandidates === []) {
+                $this->dispatch('failed_alert', title: 'No active users found for the selected role(s).');
+
+                return;
+            }
+
+            if ($userPickIds === [] && $roleCandidates !== [] && ! array_filter(
+                $roleCandidates,
+                static fn (int $id): bool => ! isset($alreadyAssigned[$id])
+            )) {
+                $this->dispatch(
+                    'failed_alert',
+                    title: 'All active members in the selected role(s) are already assigned to this task.',
+                );
+
+                return;
+            }
+
+            $fromRoles = array_values(array_filter(
+                $roleCandidates,
+                static fn (int $id): bool => ! isset($alreadyAssigned[$id])
+            ));
+        }
+        $ids = array_values(array_unique(array_merge($userPickIds, $fromRoles)));
 
         if ($ids === []) {
             Task::query()->create([
+                'task_uid' => Task::allocateNextTaskUid(),
                 'name' => $this->name,
+                'description' => $desc,
                 'task_category_id' => $this->taskCategoryId,
                 'assigned_user_id' => null,
                 'max_score' => $this->maxScore,
@@ -97,19 +150,10 @@ class CreateTask extends Component
             ]);
             $this->dispatch('success_alert', ['title' => 'Task created. Assign users from the task list if needed.']);
         } else {
-            $probe = new Task([
-                'task_category_id' => $this->taskCategoryId,
-                'name' => $this->name,
-                'max_score' => $this->maxScore,
-            ]);
-            $probe->setAttribute('deadline_at', $deadlineDb);
-
-            $toAssign = [];
-            foreach ($ids as $userId) {
-                if (! $probe->assignmentExistsForUserId($userId)) {
-                    $toAssign[] = $userId;
-                }
-            }
+            $toAssign = array_values(array_filter(
+                $ids,
+                static fn (int $userId): bool => ! isset($alreadyAssigned[$userId])
+            ));
 
             if ($toAssign === []) {
                 $this->dispatch('failed_alert', title: 'Selected members are already assigned to this task.');
@@ -117,10 +161,13 @@ class CreateTask extends Component
                 return;
             }
 
-            DB::transaction(function () use ($deadlineDb, $toAssign) {
+            DB::transaction(function () use ($deadlineDb, $toAssign, $desc) {
+                $taskUid = Task::allocateNextTaskUid();
                 foreach ($toAssign as $userId) {
                     Task::query()->create([
+                        'task_uid' => $taskUid,
                         'name' => $this->name,
+                        'description' => $desc,
                         'task_category_id' => $this->taskCategoryId,
                         'assigned_user_id' => $userId,
                         'max_score' => $this->maxScore,
@@ -145,7 +192,7 @@ class CreateTask extends Component
             }
         }
 
-        $this->reset(['name', 'taskCategoryId', 'maxScore', 'deadlineAt', 'assignUserSearch', 'selectedUserIds']);
+        $this->reset(['name', 'description', 'taskCategoryId', 'maxScore', 'deadlineAt', 'assignUserSearch', 'selectedUserIds', 'selectedRoleIds']);
         $this->resetValidation();
     }
 
@@ -175,6 +222,8 @@ class CreateTask extends Component
 
     public function render()
     {
-        return view('livewire.admin.task.create-task');
+        $assignRoles = Role::query()->orderBy('sort_order')->orderBy('id')->get(['id', 'name']);
+
+        return view('livewire.admin.task.create-task', compact('assignRoles'));
     }
 }

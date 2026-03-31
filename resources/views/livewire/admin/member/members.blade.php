@@ -3,17 +3,18 @@
         <div class="edash-content-section row g-3 g-md-4">
             <div class="col-12">
                 <div class="card">
-                    <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3 gap-md-0">
                         <div class="card-header">
                             <h4 class="card-title">Members</h4>
                         </div>
-                        <div class="card-header d-flex align-items-center gap-3">
-                            <div class="input-group" style="min-width: 260px">
+                        <div class="card-header d-flex flex-wrap flex-md-nowrap align-items-center justify-content-end gap-3 w-100 w-md-auto">
+                            <div class="input-group w-100 w-md-auto member-search">
                                 <span class="input-group-text"><i class="fi fi-rr-search"></i></span>
                                 <input type="text" class="form-control" wire:model.live="search"
                                     placeholder="Search name / ER / username / phone..." />
                             </div>
-                            <a href="{{ route('admin.member.create') }}" class="btn btn-md btn-primary">ADD</a>
+                            <a href="{{ route('admin.member.create') }}"
+                                class="btn btn-md btn-primary w-100 w-sm-auto w-md-auto">ADD</a>
                         </div>
                     </div>
 
@@ -24,7 +25,7 @@
                                     <th>No</th>
                                     <th>Name</th>
                                     <th>ER No</th>
-                                    <th>Username</th>
+                                    <th>Email</th>
                                     <th>Role / position</th>
                                     <th>Phone</th>
                                     <th>Fixed salary</th>
@@ -39,7 +40,7 @@
                                         <td>{{ ($members->currentPage() - 1) * $members->perPage() + $index + 1 }}</td>
                                         <td>{{ $user->name }}</td>
                                         <td>{{ $user->reg_no }}</td>
-                                        <td>{{ $user->unique_id }}</td>
+                                        <td>{{ $user->email }}</td>
                                         <td>{{ $user->role?->name ?? ($user->position ?? '—') }}</td>
                                         <td>{{ $user->mobile_no }}</td>
                                         <td>
@@ -97,6 +98,12 @@
         </div>
 
         <style>
+            @media (min-width: 768px) {
+                .member-search {
+                    min-width: 260px; /* restore original desktop sizing */
+                }
+            }
+
             #pg_id nav svg {
                 width: 20px !important;
             }

@@ -1,4 +1,4 @@
-<div>
+<div x-data>
     <livewire:comp.breadcumb title="PERFORMANCE" section="Admin" sub="Member Performance" action="All">
         <div class="edash-content-section row g-3 g-md-4">
             <div class="col-12">
@@ -31,8 +31,7 @@
                                 <tr>
                                     <th>No</th>
                                     <th>Name</th>
-                                    <th>ER No</th>
-                                    <th>Username</th>
+
                                     <th>Role</th>
                                     <th>Performance (%)</th>
                                     <th>Sales Income</th>
@@ -47,8 +46,8 @@
                                     <tr>
                                         <td>{{ ($members->currentPage() - 1) * $members->perPage() + $index + 1 }}</td>
                                         <td>{{ $row->name }}</td>
-                                        <td>{{ $row->reg_no }}</td>
-                                        <td>{{ $row->unique_id }}</td>
+
+                                     
                                         <td>{{ $row->role_name }}</td>
                                         <td>{{ number_format((float) $row->performance, 2) }}%</td>
                                         <td>{{ number_format((float) $row->sales_income, 2) }}</td>
@@ -61,14 +60,12 @@
                                         </td>
                                         <td>
                                             @if ($row->bonus_eligible)
+                                                @php($draftType = $bonusTypeDrafts[(int) $row->id] ?? ($row->bonus_type_saved ?? '__clear__'))
                                                 <select class="form-select form-select-sm" style="min-width: 140px"
-                                                    wire:change="saveBonusType({{ (int) $row->id }}, $event.target.value)">
-                                                    <option value="__clear__"
-                                                        @selected(empty($row->bonus_type_saved))>— Select —</option>
-                                                    <option value="cash"
-                                                        @selected($row->bonus_type_saved === 'cash')>Cash</option>
-                                                    <option value="gift"
-                                                        @selected($row->bonus_type_saved === 'gift')>Gift</option>
+                                                    wire:model.live="bonusTypeDrafts.{{ (int) $row->id }}">
+                                                    <option value="__clear__">— Select —</option>
+                                                    <option value="cash">Cash</option>
+                                                    <option value="gift">Gift</option>
                                                 </select>
                                             @else
                                                 <span class="text-muted">—</span>
@@ -76,16 +73,14 @@
                                         </td>
                                         <td style="min-width: 220px">
                                             @if ($row->bonus_eligible)
-                                                @if ($row->bonus_type_saved === 'cash')
+                                                @if ($draftType === 'cash')
                                                     <input type="number" step="0.01" class="form-control form-control-sm"
                                                         placeholder="Cash amount"
-                                                        value="{{ $row->bonus_cash_amount }}"
-                                                        wire:change="saveBonusCashAmount({{ (int) $row->id }}, $event.target.value)" />
-                                                @elseif ($row->bonus_type_saved === 'gift')
+                                                        wire:model.defer="bonusCashAmountDrafts.{{ (int) $row->id }}" />
+                                                @elseif ($draftType === 'gift')
                                                     <input type="text" class="form-control form-control-sm"
                                                         placeholder="Gift name"
-                                                        value="{{ $row->bonus_gift_name }}"
-                                                        wire:change="saveBonusGiftName({{ (int) $row->id }}, $event.target.value)" />
+                                                        wire:model.defer="bonusGiftNameDrafts.{{ (int) $row->id }}" />
                                                 @else
                                                     <span class="text-muted small">Select Cash or Gift</span>
                                                 @endif
@@ -96,6 +91,89 @@
                                         <td>
                                             <a class="btn btn-sm btn-primary"
                                                 href="{{ route('admin.member-performance.tasks', $row->id) }}">VIEW TASKS</a>
+                                            @if ($row->bonus_eligible)
+                                                <button class="btn btn-sm btn-success ms-1 mt-1 mt-sm-0"
+                                                    type="button"
+                                                    wire:click="saveBonusDraft({{ (int) $row->id }})"
+                                                    wire:loading.attr="disabled">
+                                                    SAVE BONUS
+                                                </button>
+                                            @else
+                                                <button class="btn btn-sm btn-warning ms-1 mt-1 mt-sm-0"
+                                                    type="button"
+                                                    @click.prevent="
+                                                        if (typeof Swal === 'undefined') {
+                                                            const type = prompt('Bonus type: cash or gift', 'cash');
+                                                            if (!type) return;
+                                                            const details = prompt(type === 'cash' ? 'Cash amount' : 'Gift name');
+                                                            if (details === null) return;
+                                                            $wire.giveBonusOverride({{ (int) $row->id }}, type, details);
+                                                            return;
+                                                        }
+
+                                                        const userLabel = @js($row->name . ' (' . $row->reg_no . ')');
+                                                        Swal.fire({
+                                                            title: 'Give bonus (override)',
+                                                            html: `
+                                                                <div class=&quot;text-start&quot;>
+                                                                    <div class=&quot;mb-2 small text-muted&quot;>${userLabel}</div>
+                                                                    <label class=&quot;form-label&quot;>Bonus type</label>
+                                                                    <select id=&quot;bonusType&quot; class=&quot;form-select mb-3&quot;>
+                                                                        <option value=&quot;cash&quot;>Cash</option>
+                                                                        <option value=&quot;gift&quot;>Gift</option>
+                                                                    </select>
+                                                                    <label class=&quot;form-label&quot; id=&quot;bonusDetailsLabel&quot;>Cash amount</label>
+                                                                    <input id=&quot;bonusDetails&quot; class=&quot;form-control&quot; placeholder=&quot;Enter cash amount&quot; />
+                                                                </div>
+                                                            `,
+                                                            icon: 'question',
+                                                            showCancelButton: true,
+                                                            confirmButtonText: 'Save',
+                                                            cancelButtonText: 'Cancel',
+                                                            didOpen: () => {
+                                                                const typeEl = document.getElementById('bonusType');
+                                                                const labelEl = document.getElementById('bonusDetailsLabel');
+                                                                const detailsEl = document.getElementById('bonusDetails');
+                                                                const sync = () => {
+                                                                    const t = typeEl.value;
+                                                                    if (t === 'cash') {
+                                                                        labelEl.textContent = 'Cash amount';
+                                                                        detailsEl.type = 'number';
+                                                                        detailsEl.step = '0.01';
+                                                                        detailsEl.placeholder = 'Enter cash amount';
+                                                                    } else {
+                                                                        labelEl.textContent = 'Gift name';
+                                                                        detailsEl.type = 'text';
+                                                                        detailsEl.removeAttribute('step');
+                                                                        detailsEl.placeholder = 'Enter gift name';
+                                                                    }
+                                                                };
+                                                                typeEl.addEventListener('change', sync);
+                                                                sync();
+                                                            },
+                                                            preConfirm: () => {
+                                                                const type = document.getElementById('bonusType').value;
+                                                                const details = document.getElementById('bonusDetails').value;
+                                                                if (!details || details.trim() === '') {
+                                                                    Swal.showValidationMessage('Bonus details are required.');
+                                                                    return false;
+                                                                }
+                                                                if (type === 'cash' && isNaN(Number(details))) {
+                                                                    Swal.showValidationMessage('Cash amount must be a number.');
+                                                                    return false;
+                                                                }
+                                                                return { type, details };
+                                                            }
+                                                        }).then((result) => {
+                                                            if (result.isConfirmed && result.value) {
+                                                                Swal.close();
+                                                                $wire.giveBonusOverride({{ (int) $row->id }}, result.value.type, result.value.details);
+                                                            }
+                                                        });
+                                                    ">
+                                                    GIVE BONUS
+                                                </button>
+                                            @endif
                                         </td>
                                     </tr>
                                 @endforeach

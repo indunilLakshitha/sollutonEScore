@@ -5,32 +5,33 @@ namespace App\Livewire\Admin\Admin;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
+use Livewire\WithPagination;
 
 class Admins extends Component
 {
-    public $adminUsers;
-
-    public function mount()
-    {
-        $this->adminUsers = User::where('is_admin', 1)->get();
-    }
+    use WithPagination;
 
     public function render()
     {
-        return view('livewire.admin.admin.admins');
+        $adminUsers = User::query()
+            ->where('is_admin', 1)
+            ->orderByDesc('id')
+            ->paginate(15);
+
+        return view('livewire.admin.admin.admins', compact('adminUsers'));
     }
 
     public function delete($id)
     {
         $user = User::where('id', $id)->first();
 
-        if (!isset($user) || !Auth::user()->is_admin)
+        if (!isset($user) || !Auth::user()->is_admin) {
             abort(404);
+        }
 
         $user->forceDelete();
 
-        // session()->flash('message', 'Admin User successfully Deleted.');
         $this->dispatch('success_alert', ['title' => 'Admin User successfully Deleted.']);
-        $this->mount();
+        $this->resetPage();
     }
 }

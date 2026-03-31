@@ -26,19 +26,19 @@
                         <table id="zeroConfig" class="table mb-0">
                             <thead>
                                 <tr>
-                                    <th>No</th>
-                                    <th>Id</th>
-                                    <th>Username</th>
-                                    <th>Permissions</th>
-                                    <th>Created</th>
+                                    <th scope="col">No</th>
+                                    <th scope="col">Id</th>
+                                    <th scope="col">Username</th>
+                                    <th scope="col">Permissions</th>
+                                    <th scope="col">Created</th>
 
-                                    <th>ACTION</th>
+                                    <th scope="col">ACTION</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach ($adminUsers as $index => $user)
                                     <tr>
-                                        <td>{{ $index + 1 }}</td>
+                                        <td>{{ ($adminUsers->currentPage() - 1) * $adminUsers->perPage() + $index + 1 }}</td>
                                         <td>{{ $user->id }}</td>
                                         <td></td>
                                         <td></td>
@@ -64,16 +64,20 @@
                             </tbody>
                             <tfoot>
                                 <tr>
-                                    <th>No</th>
-                                    <th>Id</th>
-                                    <th>Username</th>
-                                    <th>Permissions</th>
-                                    <th>Created</th>
+                                    <th scope="col">No</th>
+                                    <th scope="col">Id</th>
+                                    <th scope="col">Username</th>
+                                    <th scope="col">Permissions</th>
+                                    <th scope="col">Created</th>
 
-                                    <th>ACTION</th>
+                                    <th scope="col">ACTION</th>
                                 </tr>
                             </tfoot>
                         </table>
+                    </div>
+
+                    <div id="pg_id">
+                        {{ $adminUsers->links() }}
                     </div>
                 </div>
             </div>

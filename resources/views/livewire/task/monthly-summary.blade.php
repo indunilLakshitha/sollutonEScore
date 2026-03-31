@@ -6,11 +6,26 @@
                     <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
                         <div>
                             <h4 class="card-title mb-0">Monthly Summary</h4>
-                            <div class="text-muted small">{{ $user->name }}</div>
+                            {{-- <div class="text-muted small">{{ $user->name }}</div> --}}
                         </div>
                         <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <input type="text" class="form-control" style="min-width: 220px"
+                                wire:model.live.debounce.300ms="search"
+                                placeholder="Search task / category..." />
                             <input type="number" class="form-control" style="width: 120px" min="2000" max="2100"
                                 wire:model.live="year" />
+                            <input type="date" class="form-control" style="width: 170px"
+                                wire:model.live="filterCreatedDay" title="Created day" />
+                            <input type="month" class="form-control" style="width: 160px"
+                                wire:model.live="filterCreatedMonth" title="Created month" />
+                            <input type="date" class="form-control" style="width: 170px"
+                                wire:model.live="filterCreatedFrom" title="Created from" />
+                            <input type="date" class="form-control" style="width: 170px"
+                                wire:model.live="filterCreatedTo" title="Created to" />
+                            <button type="button" class="btn btn-outline-secondary"
+                                wire:click="clearDateFilters">
+                                Clear dates
+                            </button>
                         </div>
                     </div>
 

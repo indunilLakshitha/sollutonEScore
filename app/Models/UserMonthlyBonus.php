@@ -18,12 +18,14 @@ class UserMonthlyBonus extends Model
         'bonus_type',
         'cash_amount',
         'gift_name',
+        'claimed_at',
     ];
 
     protected $casts = [
         'year' => 'integer',
         'month' => 'integer',
         'cash_amount' => 'decimal:2',
+        'claimed_at' => 'datetime',
     ];
 
     public function user(): BelongsTo

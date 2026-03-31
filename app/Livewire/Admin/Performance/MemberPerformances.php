@@ -11,9 +11,13 @@ use App\Models\UserMonthlyBonus;
 use App\Models\UserMonthlySalary;
 use App\Models\UserPerformance;
 use App\Models\UserSalesIncome;
+use App\Services\SmsService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -26,6 +30,20 @@ class MemberPerformances extends Component
     public int $year = 0;
 
     public int $month = 0;
+
+    /**
+     * Bonus drafts per member row.
+     * We keep these in memory so the UI can change without auto-saving to DB.
+     *
+     * @var array<int, string|null>
+     */
+    public array $bonusTypeDrafts = [];
+
+    /** @var array<int, string|null> */
+    public array $bonusCashAmountDrafts = [];
+
+    /** @var array<int, string|null> */
+    public array $bonusGiftNameDrafts = [];
 
     public function mount(): void
     {
@@ -44,12 +62,93 @@ class MemberPerformances extends Component
 
     public function updatedYear(): void
     {
-        $this->resetPage();
+        $this->resetForYearMonthChange();
     }
 
     public function updatedMonth(): void
     {
+        $this->resetForYearMonthChange();
+    }
+
+    private function resetForYearMonthChange(): void
+    {
         $this->resetPage();
+        $this->resetBonusDrafts();
+    }
+
+    private function resetBonusDrafts(): void
+    {
+        $this->bonusTypeDrafts = [];
+        $this->bonusCashAmountDrafts = [];
+        $this->bonusGiftNameDrafts = [];
+    }
+
+    private function initBonusDraftsForUser(
+        int $userId,
+        ?string $bonusTypeSaved,
+        $cashAmountSaved,
+        ?string $giftNameSaved
+    ): void {
+        // Only initialize when the user doesn't already have a draft in this browser session.
+        // This prevents wiping unsaved edits on re-renders.
+        if (!array_key_exists($userId, $this->bonusTypeDrafts)) {
+            $this->bonusTypeDrafts[$userId] = $bonusTypeSaved ?: '__clear__';
+        }
+
+        if (!array_key_exists($userId, $this->bonusCashAmountDrafts)) {
+            $this->bonusCashAmountDrafts[$userId] = $cashAmountSaved !== null ? (string) $cashAmountSaved : null;
+        }
+
+        if (!array_key_exists($userId, $this->bonusGiftNameDrafts)) {
+            $this->bonusGiftNameDrafts[$userId] = $giftNameSaved;
+        }
+    }
+
+    public function saveBonusDraft(int $userId): void
+    {
+        $bonusType = strtolower(trim((string) ($this->bonusTypeDrafts[$userId] ?? '__clear__')));
+
+        if ($bonusType === '' || $bonusType === '__clear__') {
+            $this->saveBonusType($userId, '__clear__');
+            return;
+        }
+
+        if ($bonusType === UserMonthlyBonus::TYPE_CASH) {
+            $amount = $this->bonusCashAmountDrafts[$userId] ?? null;
+            $this->saveBonusCashAmount($userId, $amount);
+            $this->sendBonusSmsIfPossible($userId);
+            return;
+        }
+
+        if ($bonusType === UserMonthlyBonus::TYPE_GIFT) {
+            $giftName = $this->bonusGiftNameDrafts[$userId] ?? '';
+            $this->saveBonusGiftName($userId, $giftName);
+            $this->sendBonusSmsIfPossible($userId);
+            return;
+        }
+
+        $this->dispatch('success_alert', ['title' => 'Invalid bonus type.']);
+    }
+
+    private function sendBonusSmsIfPossible(int $userId): void
+    {
+        // Send SMS only after the full bonus (type + details) is saved (i.e., after SAVE BONUS).
+        $user = User::query()->whereKey($userId)->first();
+        if (!$user) {
+            return;
+        }
+
+        $bonus = UserMonthlyBonus::query()
+            ->where('user_id', $userId)
+            ->where('year', $this->year)
+            ->where('month', $this->month)
+            ->first();
+
+        if (!$bonus) {
+            return;
+        }
+
+        $this->sendBonusSms($user, $bonus);
     }
 
     public function saveBonusType(int $userId, string $bonusType): void
@@ -178,6 +277,107 @@ class MemberPerformances extends Component
         $bonus->save();
 
         $this->dispatch('success_alert', ['title' => 'Gift bonus saved.']);
+    }
+
+    public function giveBonusOverride(int $userId, string $bonusType, $details): void
+    {
+        if (!Auth::user()?->is_admin) {
+            abort(404);
+        }
+
+        $bonusType = strtolower(trim($bonusType));
+        $year = $this->year;
+        $month = $this->month;
+
+        if (!in_array($bonusType, [UserMonthlyBonus::TYPE_CASH, UserMonthlyBonus::TYPE_GIFT], true)) {
+            $this->dispatch('failed_alert', ['title' => 'Invalid bonus type.']);
+            return;
+        }
+
+        $bonus = UserMonthlyBonus::query()->firstOrNew([
+            'user_id' => $userId,
+            'year' => $year,
+            'month' => $month,
+        ]);
+
+        $bonus->bonus_type = $bonusType;
+        if (Schema::hasColumn('user_monthly_bonuses', 'claimed_at')) {
+            $bonus->claimed_at = null; // reset claim if overriding
+        }
+
+        if ($bonusType === UserMonthlyBonus::TYPE_CASH) {
+            $amount = is_numeric($details) ? (float) $details : null;
+            if ($amount === null) {
+                $this->dispatch('failed_alert', ['title' => 'Cash amount is required.']);
+                return;
+            }
+            $bonus->cash_amount = $amount;
+            $bonus->gift_name = null;
+        } else {
+            $giftName = trim((string) $details);
+            if ($giftName === '') {
+                $this->dispatch('failed_alert', ['title' => 'Gift name is required.']);
+                return;
+            }
+            $bonus->gift_name = $giftName;
+            $bonus->cash_amount = null;
+        }
+
+        $bonus->save();
+
+        $user = User::query()->whereKey($userId)->first();
+        if ($user) {
+            $this->sendBonusSms($user, $bonus);
+        }
+
+        // Keep drafts in sync with what was saved.
+        $this->bonusTypeDrafts[$userId] = $bonusType;
+        $this->bonusCashAmountDrafts[$userId] = $bonus->cash_amount !== null ? (string) $bonus->cash_amount : null;
+        $this->bonusGiftNameDrafts[$userId] = $bonus->gift_name;
+
+        $this->dispatch('success_alert', ['title' => 'Bonus saved.']);
+    }
+
+    private function sendBonusSms(User $user, UserMonthlyBonus $bonus): void
+    {
+        $mobileNo = trim((string) ($user->mobile_no ?? ''));
+        if ($mobileNo === '') {
+            return;
+        }
+
+        $label = sprintf('%04d-%02d', (int) $bonus->year, (int) $bonus->month);
+        $body = '';
+        if ($bonus->bonus_type === UserMonthlyBonus::TYPE_CASH) {
+            $body = sprintf(
+                'Hello %s, you have received a cash bonus for %s: %s.',
+                $user->notificationFirstName(),
+                $label,
+                number_format((float) ($bonus->cash_amount ?? 0), 2)
+            );
+        } elseif ($bonus->bonus_type === UserMonthlyBonus::TYPE_GIFT) {
+            $body = sprintf(
+                'Hello %s, you have received a gift bonus for %s: %s.',
+                $user->notificationFirstName(),
+                $label,
+                (string) ($bonus->gift_name ?? '')
+            );
+        } else {
+            $body = sprintf(
+                'Hello %s, you have received a bonus for %s.',
+                $user->notificationFirstName(),
+                $label
+            );
+        }
+
+        try {
+            app(SmsService::class)->sendMsg($mobileNo, Str::limit($body, 480));
+        } catch (\Throwable $e) {
+            Log::warning('Bonus SMS failed.', [
+                'user_id' => (int) $user->id,
+                'bonus_id' => (int) ($bonus->id ?? 0),
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     public function render()
@@ -314,6 +514,13 @@ class MemberPerformances extends Component
             $row->bonus_type_saved = $bonusRow?->bonus_type ?? null;
             $row->bonus_cash_amount = $bonusRow?->cash_amount ?? null;
             $row->bonus_gift_name = $bonusRow?->gift_name ?? null;
+
+            $this->initBonusDraftsForUser(
+                $uid,
+                $row->bonus_type_saved,
+                $row->bonus_cash_amount,
+                $row->bonus_gift_name
+            );
 
             return $row;
         });

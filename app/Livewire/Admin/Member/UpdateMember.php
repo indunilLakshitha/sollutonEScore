@@ -12,16 +12,20 @@ use Livewire\Component;
 
 class UpdateMember extends Component
 {
+    private const MIN_SALARY_YEAR = 2026;
+    private const MAX_SALARY_YEAR = 2050;
+
     public int $id;
 
     /** Which member edit tab is visible: basic | salary (kept across Livewire re-renders). */
     public string $activeEditTab = 'basic';
 
-    public string $name = '';
+    public string $firstName = '';
+    public string $lastName = '';
+    public string $email = '';
     public ?string $regNo = null;
     public ?int $roleId = null;
 
-    public ?string $uniqueId = null;
     public ?string $mobileNo = null;
     public bool $fixedSalary = false;
 
@@ -33,13 +37,13 @@ class UpdateMember extends Component
     public ?string $password = null;
     public ?string $confirmPassword = null;
 
-    public int $salaryYear = 0;
+    /** Calendar month for the entry (HTML month input: YYYY-MM). */
+    public ?string $salaryEntryMonth = null;
 
-    /** @var array<int, string|null> */
-    public array $monthlySalaryInputs = [];
+    public ?string $monthlySalaryEntryAmount = null;
 
-    /** @var array<int, string|null> */
-    public array $monthlySalesCountInputs = [];
+    /** @var array<int, array{year: int, month: int, amount: string, sales_count: int}> */
+    public array $monthlySalaryRows = [];
 
     /** @var \Illuminate\Database\Eloquent\Collection<int, Role>|null */
     public $roles;
@@ -53,9 +57,10 @@ class UpdateMember extends Component
         $user = User::query()->whereKey($id)->firstOrFail();
         $this->id = (int) $user->id;
 
-        $this->name = (string) $user->name;
+        $this->firstName = (string) ($user->first_name ?? '');
+        $this->lastName = (string) ($user->last_name ?? '');
+        $this->email = (string) ($user->email ?? '');
         $this->regNo = $user->reg_no;
-        $this->uniqueId = $user->unique_id;
         $this->mobileNo = $user->mobile_no;
         $this->fixedSalary = ((int) ($user->fixed_salary ?? 0)) === 1;
         $this->salaryAmount = $user->salary_amount !== null
@@ -73,8 +78,8 @@ class UpdateMember extends Component
 
         $this->roles = Role::query()->orderBy('sort_order')->orderBy('id')->get();
 
-        $this->salaryYear = (int) now()->format('Y');
-        $this->loadMonthlySalaries();
+        $this->salaryEntryMonth = $this->clampSalaryMonthString(now()->format('Y-m'));
+        $this->refreshMonthlySalaryRows();
     }
 
     public function updatedFixedSalary(): void
@@ -91,54 +96,55 @@ class UpdateMember extends Component
         }
     }
 
-    public function updatedSalaryYear(): void
-    {
-        $this->loadMonthlySalaries();
-    }
-
     public function saveMonthlySalaries(): void
     {
         if (!Auth::user()?->is_admin) {
             abort(404);
         }
 
-        $this->validate([
-            'salaryYear' => 'required|integer|min:2000|max:2100',
-            'monthlySalaryInputs' => 'required|array|size:12',
-            'monthlySalaryInputs.*' => 'nullable|numeric|min:0|max:999999999.99',
-            'monthlySalesCountInputs' => 'required|array|size:12',
-            'monthlySalesCountInputs.*' => 'nullable|integer|min:0|max:100000000',
-        ]);
+        if ($this->fixedSalary) {
+            $this->dispatch('error_alert', ['title' => 'Monthly salary is disabled when fixed salary is enabled.']);
 
-        for ($month = 1; $month <= 12; $month++) {
-            $rawSalary = $this->monthlySalaryInputs[$month] ?? null;
-            $rawCount = $this->monthlySalesCountInputs[$month] ?? null;
-
-            if (($rawSalary === null || $rawSalary === '') && ($rawCount === null || $rawCount === '')) {
-                UserMonthlySalary::query()
-                    ->where('user_id', $this->id)
-                    ->where('year', $this->salaryYear)
-                    ->where('month', $month)
-                    ->delete();
-
-                continue;
-            }
-
-            UserMonthlySalary::query()->updateOrCreate(
-                [
-                    'user_id' => $this->id,
-                    'year' => $this->salaryYear,
-                    'month' => $month,
-                ],
-                [
-                    'amount' => ($rawSalary === null || $rawSalary === '') ? 0 : round((float) $rawSalary, 2),
-                    'sales_count' => ($rawCount === null || $rawCount === '') ? 0 : (int) $rawCount,
-                ]
-            );
+            return;
         }
 
-        $this->loadMonthlySalaries();
-        $this->dispatch('success_alert', ['title' => 'Monthly salary and sales count saved.']);
+        $this->validate([
+            'salaryEntryMonth' => 'required|date_format:Y-m',
+            'monthlySalaryEntryAmount' => 'required|numeric|min:0|max:999999999.99',
+        ]);
+
+        $parts = explode('-', (string) $this->salaryEntryMonth);
+        $year = (int) ($parts[0] ?? 0);
+        $month = (int) ($parts[1] ?? 0);
+        if ($year < self::MIN_SALARY_YEAR || $year > self::MAX_SALARY_YEAR || $month < 1 || $month > 12) {
+            $this->addError('salaryEntryMonth', 'Choose a month between '.self::MIN_SALARY_YEAR.' and '.self::MAX_SALARY_YEAR.'.');
+
+            return;
+        }
+
+        $amount = round((float) $this->monthlySalaryEntryAmount, 2);
+
+        $existing = UserMonthlySalary::query()
+            ->where('user_id', $this->id)
+            ->where('year', $year)
+            ->where('month', $month)
+            ->first();
+
+        UserMonthlySalary::query()->updateOrCreate(
+            [
+                'user_id' => $this->id,
+                'year' => $year,
+                'month' => $month,
+            ],
+            [
+                'amount' => $amount,
+                'sales_count' => (int) ($existing?->sales_count ?? 0),
+            ]
+        );
+
+        $this->refreshMonthlySalaryRows();
+        $this->monthlySalaryEntryAmount = null;
+        $this->dispatch('success_alert', ['title' => 'Salary saved for '.sprintf('%04d-%02d', $year, $month).'.']);
     }
 
     public function updateMember(): void
@@ -148,9 +154,10 @@ class UpdateMember extends Component
         }
 
         $rules = [
-            'name' => 'required|string',
+            'firstName' => 'required|string|max:255',
+            'lastName' => 'required|string|max:255',
+            'email' => 'required|email:rfc,dns|max:255|unique:users,email,' . $this->id,
             'regNo' => 'required|string|max:255|unique:users,reg_no,' . $this->id,
-            'uniqueId' => 'nullable|string|max:255|unique:users,unique_id,' . $this->id,
             'mobileNo' => 'nullable|string|max:255',
             'fixedSalary' => 'required|boolean',
             'activeStatus' => 'required|integer|in:' . User::UNBLOCKED . ',' . User::BLOCKED,
@@ -176,10 +183,13 @@ class UpdateMember extends Component
         $this->validate($rules);
 
         $user = User::query()->whereKey($this->id)->firstOrFail();
-        $user->name = $this->name;
+        $user->first_name = $this->firstName;
+        $user->last_name = $this->lastName;
+        $user->name = trim($this->firstName . ' ' . $this->lastName);
         // $user->reg_no = $this->regNo;
         // $user->unique_id = $this->uniqueId;
         $user->mobile_no = $this->mobileNo;
+        $user->email = $this->email;
 
         $role = Schema::hasTable('roles')
             ? Role::query()->whereKey($this->roleId)->firstOrFail()
@@ -204,7 +214,6 @@ class UpdateMember extends Component
                 : null;
         }
         $user->active_status = $this->activeStatus;
-        $user->email = $this->regNo; // keep in sync with current Fortify lookup
 
         if ($this->password) {
             $user->password = Hash::make($this->password);
@@ -218,24 +227,32 @@ class UpdateMember extends Component
         $this->dispatch('success_alert', ['title' => 'Member updated.']);
     }
 
-    private function loadMonthlySalaries(): void
+    private function refreshMonthlySalaryRows(): void
     {
-        $this->monthlySalaryInputs = [];
-        $this->monthlySalesCountInputs = [];
-        for ($month = 1; $month <= 12; $month++) {
-            $this->monthlySalaryInputs[$month] = null;
-            $this->monthlySalesCountInputs[$month] = null;
-        }
-
-        $rows = UserMonthlySalary::query()
+        $this->monthlySalaryRows = UserMonthlySalary::query()
             ->where('user_id', $this->id)
-            ->where('year', $this->salaryYear)
-            ->get(['month', 'amount', 'sales_count']);
+            ->orderByDesc('year')
+            ->orderByDesc('month')
+            ->get(['year', 'month', 'amount', 'sales_count'])
+            ->map(fn (UserMonthlySalary $r): array => [
+                'year' => (int) $r->year,
+                'month' => (int) $r->month,
+                'amount' => (string) $r->amount,
+                'sales_count' => (int) ($r->sales_count ?? 0),
+            ])
+            ->values()
+            ->all();
+    }
 
-        foreach ($rows as $row) {
-            $this->monthlySalaryInputs[(int) $row->month] = (string) $row->amount;
-            $this->monthlySalesCountInputs[(int) $row->month] = (string) ((int) ($row->sales_count ?? 0));
-        }
+    private function clampSalaryMonthString(string $ym): string
+    {
+        $parts = explode('-', $ym);
+        $y = (int) ($parts[0] ?? self::MIN_SALARY_YEAR);
+        $m = (int) ($parts[1] ?? 1);
+        $y = max(self::MIN_SALARY_YEAR, min(self::MAX_SALARY_YEAR, $y));
+        $m = max(1, min(12, $m));
+
+        return sprintf('%04d-%02d', $y, $m);
     }
 
     public function render()

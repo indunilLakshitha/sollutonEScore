@@ -11,6 +11,9 @@ trait WithAssignUserPicker
     /** @var array<int, int|string> */
     public array $selectedUserIds = [];
 
+    /** @var array<int, int|string> */
+    public array $selectedRoleIds = [];
+
     public function toggleAssignUser(int $userId): void
     {
         $userId = (int) $userId;
@@ -20,6 +23,18 @@ trait WithAssignUserPicker
             $this->selectedUserIds = array_values(array_filter($ids, static fn (int $id): bool => $id !== $userId));
         } else {
             $this->selectedUserIds = array_values(array_merge($ids, [$userId]));
+        }
+    }
+
+    public function toggleAssignRole(int $roleId): void
+    {
+        $roleId = (int) $roleId;
+        $ids = array_map('intval', $this->selectedRoleIds);
+
+        if (in_array($roleId, $ids, true)) {
+            $this->selectedRoleIds = array_values(array_filter($ids, static fn (int $id): bool => $id !== $roleId));
+        } else {
+            $this->selectedRoleIds = array_values(array_merge($ids, [$roleId]));
         }
     }
 
